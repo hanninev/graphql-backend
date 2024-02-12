@@ -55,6 +55,7 @@ type Token {
     allBooks(author: String, genre: String): [Book!]!
     allAuthors: [Author!]!
     me: User
+    genres: [String]
   }
 
   type Mutation {
@@ -103,6 +104,16 @@ const resolvers = {
     allAuthors: async () => Author.find({}),
     me: (root, args, context) => {
       return context.currentUser
+    },
+    genres: async () => {
+      const result = await Book.aggregate([
+        { $unwind: '$genres' },
+        { $group: { _id: '$genres' } },
+        { $sort: { _id: 1 } }
+      ]);
+
+      const genres = result.map(item => item._id);
+      return genres;
     }
   },
   Book: {
@@ -117,8 +128,8 @@ const resolvers = {
     born: (root) => root.born,
     id: (root) => root.id,
     bookCount: async (root) => {
-      const books = await Book.find({});
-      return books.filter(book => book.author === root.name).length;
+      const books = await Book.find({ author: root.id });
+      return books.length;
     }
   },
   Mutation: {
@@ -236,7 +247,7 @@ startStandaloneServer(server, {
         auth.substring(7), 'process.env.JWT_SECRET'
       )
       const currentUser = await User
-        .findById(decodedToken.id).populate('favoriteGenre')
+        .findById(decodedToken.id)
       return { currentUser }
     }
   },
